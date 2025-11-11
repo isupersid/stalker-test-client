@@ -9,14 +9,17 @@ import time
 from stalker_client import StalkerClient, load_config
 
 
-def test_mac_address(portal_url, mac_address, timezone="America/New_York", verbose=False, max_retries=3):
+def test_mac_address(portal_url, mac_address, timezone="America/New_York", verbose=False, max_retries=3, api_path=None):
     """
     Test a single MAC address against the portal.
+    
+    Args:
+        api_path: Pre-detected API path to avoid re-detection for each MAC
     
     Returns:
         dict: Result with status, message, and other details
     """
-    client = StalkerClient(portal_url, mac_address, timezone, debug=False)
+    client = StalkerClient(portal_url, mac_address, timezone, api_path=api_path, debug=False)
     
     result = {
         'mac': mac_address,
@@ -234,15 +237,16 @@ def main():
     
     # Get delay between requests
     print("Delay between requests (to avoid rate limiting):")
-    print("  - 0.5 seconds (fast, may trigger rate limits)")
-    print("  - 1 second (recommended)")
-    print("  - 2-3 seconds (safe for strict servers)")
-    delay_input = input("Delay in seconds (default: 1): ").strip()
+    print("  ⚠️  Note: Each MAC = 2 requests (handshake + auth)")
+    print("  - 5 seconds (recommended for this server)")
+    print("  - 10 seconds (safer)")
+    print("  - 15+ seconds (very safe, but slow)")
+    delay_input = input("Delay in seconds (default: 5): ").strip()
     
     try:
-        delay = float(delay_input) if delay_input else 1.0
+        delay = float(delay_input) if delay_input else 5.0
     except ValueError:
-        delay = 1.0
+        delay = 5.0
     
     # Calculate estimated time
     estimated_time = len(macs) * delay
@@ -269,6 +273,14 @@ def main():
     print("="*60)
     print()
     
+    # Detect API path once to avoid extra requests
+    print("🔍 Detecting API endpoint...")
+    dummy_client = StalkerClient(portal_url, macs[0], timezone, debug=False)
+    dummy_client.detect_api_path()
+    api_path = dummy_client.api_path
+    print(f"✅ Using endpoint: {api_path}")
+    print()
+    
     results = []
     authorized_macs = []
     
@@ -276,7 +288,7 @@ def main():
         print(f"[{i}/{len(macs)}] Testing {mac}...", end=' ')
         sys.stdout.flush()
         
-        result = test_mac_address(portal_url, mac, timezone)
+        result = test_mac_address(portal_url, mac, timezone, api_path=api_path)
         results.append(result)
         
         if result['authorized']:

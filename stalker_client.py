@@ -143,7 +143,8 @@ class StalkerClient:
     
     def handshake(self):
         """Perform initial handshake with the portal."""
-        print(f"🔄 Initiating handshake with {self.portal_url}...")
+        if self.debug:
+            print(f"🔄 Initiating handshake with {self.portal_url}...")
         
         # Auto-detect API path if not set
         if not self.api_path:
@@ -163,13 +164,16 @@ class StalkerClient:
             js_data = response['js']
             if 'token' in js_data:
                 self.token = js_data['token']
-                print(f"✅ Handshake successful! Token received: {self.token[:20]}...")
+                if self.debug:
+                    print(f"✅ Handshake successful! Token received: {self.token[:20]}...")
                 return True
             else:
-                print(f"❌ No token in response: {js_data}")
+                if self.debug:
+                    print(f"❌ No token in response: {js_data}")
                 return False
         else:
-            print(f"❌ Handshake failed")
+            if self.debug:
+                print(f"❌ Handshake failed")
             return False
     
     def authenticate(self):
