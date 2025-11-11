@@ -193,6 +193,32 @@ def main():
     print()
     print(f"About to test {len(macs)} MAC address(es)")
     print(f"Portal: {portal_url}")
+    print()
+    
+    # Get delay between requests
+    print("Delay between requests (to avoid rate limiting):")
+    print("  - 0.5 seconds (fast, may trigger rate limits)")
+    print("  - 1 second (recommended)")
+    print("  - 2-3 seconds (safe for strict servers)")
+    delay_input = input("Delay in seconds (default: 1): ").strip()
+    
+    try:
+        delay = float(delay_input) if delay_input else 1.0
+    except ValueError:
+        delay = 1.0
+    
+    # Calculate estimated time
+    estimated_time = len(macs) * delay
+    minutes = int(estimated_time // 60)
+    seconds = int(estimated_time % 60)
+    
+    if minutes > 0:
+        time_str = f"{minutes}m {seconds}s"
+    else:
+        time_str = f"{seconds}s"
+    
+    print(f"⏱️  Estimated time: ~{time_str}")
+    print()
     confirm = input("Continue? (y/n): ").strip().lower()
     
     if confirm != 'y':
@@ -234,7 +260,7 @@ def main():
         
         # Small delay to avoid overwhelming the server
         if i < len(macs):
-            time.sleep(0.5)
+            time.sleep(delay)
     
     # Summary
     print()
