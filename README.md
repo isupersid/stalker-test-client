@@ -182,6 +182,13 @@ The MAC address should be in the format `XX:XX:XX:XX:XX:XX`. Common formats:
 - This tool is for testing legitimate connections with your service provider
 - Keep your credentials secure
 
+## Documentation & Resources
+
+For more information about Stalker Portal features and API:
+- See [RESOURCES.md](RESOURCES.md) for comprehensive documentation
+- Official Stalker docs: https://docs.infomir.com.ua/
+- API actions reference, common parameters, and examples included
+
 ## License
 
 MIT License - Feel free to use and modify for your testing needs.
