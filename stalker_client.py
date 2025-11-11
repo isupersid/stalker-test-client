@@ -8,6 +8,7 @@ import requests
 import json
 import time
 import hashlib
+import os
 from urllib.parse import urljoin, quote
 
 
@@ -263,6 +264,41 @@ class StalkerClient:
         return True
 
 
+def load_config(config_path="config.json"):
+    """Load configuration from JSON file."""
+    if os.path.exists(config_path):
+        try:
+            with open(config_path, 'r') as f:
+                config = json.load(f)
+            print(f"✅ Loaded configuration from {config_path}")
+            return config
+        except json.JSONDecodeError as e:
+            print(f"⚠️  Error parsing {config_path}: {e}")
+            return {}
+        except Exception as e:
+            print(f"⚠️  Error reading {config_path}: {e}")
+            return {}
+    return {}
+
+
+def save_config(portal_url, mac_address, timezone, config_path="config.json"):
+    """Save configuration to JSON file."""
+    config = {
+        "portal_url": portal_url,
+        "mac_address": mac_address,
+        "timezone": timezone
+    }
+    
+    try:
+        with open(config_path, 'w') as f:
+            json.dump(config, f, indent=2)
+        print(f"✅ Configuration saved to {config_path}")
+        return True
+    except Exception as e:
+        print(f"⚠️  Error saving configuration: {e}")
+        return False
+
+
 def main():
     """Main entry point for the console application."""
     print()
@@ -272,23 +308,56 @@ def main():
     print("╚════════════════════════════════════════════════════════════╝")
     print()
     
-    # Get user input
-    print("Please enter your connection details:")
-    print()
+    # Try to load configuration from file
+    config = load_config()
     
-    portal_url = input("Portal URL (e.g., http://portal.example.com): ").strip()
+    # Get values from config or prompt user
+    if config:
+        print("Using configuration file (press Enter to keep, or type new value):")
+        print()
+    else:
+        print("No configuration file found. Please enter your connection details:")
+        print()
+    
+    # Portal URL
+    if config.get('portal_url'):
+        prompt = f"Portal URL [{config['portal_url']}]: "
+        portal_url = input(prompt).strip()
+        if not portal_url:
+            portal_url = config['portal_url']
+    else:
+        portal_url = input("Portal URL (e.g., http://portal.example.com): ").strip()
+    
     if not portal_url:
         print("❌ Portal URL is required!")
         return
     
-    mac_address = input("MAC Address (e.g., 00:1A:79:XX:XX:XX): ").strip()
+    # MAC Address
+    if config.get('mac_address'):
+        prompt = f"MAC Address [{config['mac_address']}]: "
+        mac_address = input(prompt).strip()
+        if not mac_address:
+            mac_address = config['mac_address']
+    else:
+        mac_address = input("MAC Address (e.g., 00:1A:79:XX:XX:XX): ").strip()
+    
     if not mac_address:
         print("❌ MAC address is required!")
         return
     
-    timezone = input("Timezone (default: America/New_York): ").strip()
+    # Timezone
+    default_timezone = config.get('timezone', 'America/New_York')
+    timezone = input(f"Timezone (default: {default_timezone}): ").strip()
     if not timezone:
-        timezone = "America/New_York"
+        timezone = default_timezone
+    
+    # Ask to save configuration if it's new or changed
+    if not config or config.get('portal_url') != portal_url or \
+       config.get('mac_address') != mac_address or config.get('timezone') != timezone:
+        print()
+        save_choice = input("💾 Save these settings to config.json? (y/n): ").strip().lower()
+        if save_choice == 'y':
+            save_config(portal_url, mac_address, timezone)
     
     print()
     

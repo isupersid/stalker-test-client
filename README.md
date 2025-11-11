@@ -38,6 +38,25 @@ You'll be prompted to enter:
 - MAC Address (e.g., `00:1A:79:XX:XX:XX`)
 - Timezone (optional, defaults to `America/New_York`)
 
+### Using a Configuration File
+
+To avoid entering your credentials each time, you can create a `config.json` file:
+
+```json
+{
+  "portal_url": "http://portal.example.com",
+  "mac_address": "00:1A:79:XX:XX:XX",
+  "timezone": "America/New_York"
+}
+```
+
+The application will automatically:
+1. Load settings from `config.json` if it exists
+2. Allow you to override values (press Enter to keep existing values)
+3. Offer to save new settings when values change
+
+**Note**: `config.json` is ignored by git to keep your credentials safe!
+
 ### Programmatic Usage
 
 You can also use the client as a Python module:
