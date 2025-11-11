@@ -170,13 +170,30 @@ def main():
     
     elif choice == '3':
         print()
-        print("Example: 00:1A:79:16:BA:")
-        base = input("Base MAC (first 5 octets with colons): ").strip()
+        
+        # Try to get default base from config
+        default_base = ""
+        if config.get('mac_address'):
+            # Extract first 5 octets from config MAC
+            config_mac = config['mac_address']
+            octets = config_mac.split(':')
+            if len(octets) >= 6:
+                default_base = ':'.join(octets[:5]) + ':'
+        
+        if default_base:
+            print(f"Example: 00:1A:79:16:BA:")
+            base = input(f"Base MAC (first 5 octets with colons) [{default_base}]: ").strip()
+            if not base:
+                base = default_base
+        else:
+            print("Example: 00:1A:79:16:BA:")
+            base = input("Base MAC (first 5 octets with colons): ").strip()
+        
         if not base.endswith(':'):
             base += ':'
         
-        start = int(input("Start (0-255): ").strip() or "0")
-        end = int(input("End (0-255): ").strip() or "255")
+        start = int(input("Start (0-255, default: 0): ").strip() or "0")
+        end = int(input("End (0-255, default: 255): ").strip() or "255")
         
         macs = generate_mac_range(base, start, end)
         print(f"✅ Generated {len(macs)} MAC addresses")
