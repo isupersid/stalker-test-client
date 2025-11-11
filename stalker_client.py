@@ -15,7 +15,7 @@ from urllib.parse import urljoin, quote
 class StalkerClient:
     """Client for connecting to Stalker portal middleware."""
     
-    def __init__(self, portal_url, mac_address, timezone="America/New_York"):
+    def __init__(self, portal_url, mac_address, timezone="America/New_York", api_path=None, debug=False):
         """
         Initialize the Stalker client.
         
@@ -23,12 +23,16 @@ class StalkerClient:
             portal_url: The base URL of the Stalker portal (e.g., http://portal.example.com)
             mac_address: MAC address of the set-top-box (format: 00:1A:79:XX:XX:XX)
             timezone: Timezone for the client
+            api_path: Custom API path (default: tries common paths automatically)
+            debug: Enable debug output
         """
         self.portal_url = portal_url.rstrip('/')
         self.mac_address = mac_address.upper()
         self.timezone = timezone
         self.token = None
         self.session = requests.Session()
+        self.debug = debug
+        self.api_path = api_path
         
         # Set up default headers
         self.session.headers.update({
@@ -52,10 +56,26 @@ class StalkerClient:
         if self.token:
             params['token'] = self.token
         
+        if self.debug:
+            print(f"🔍 DEBUG: Request URL: {url}")
+            print(f"🔍 DEBUG: Params: {params}")
+        
         try:
             response = self.session.get(url, params=params, timeout=10)
+            
+            if self.debug:
+                print(f"🔍 DEBUG: Status Code: {response.status_code}")
+                print(f"🔍 DEBUG: Response Headers: {dict(response.headers)}")
+                print(f"🔍 DEBUG: Response Text: {response.text[:500]}")
+            
             response.raise_for_status()
             return response.json()
+        except requests.exceptions.HTTPError as e:
+            if self.debug:
+                print(f"🔍 DEBUG: HTTP Error: {e}")
+                print(f"🔍 DEBUG: Response content: {response.text}")
+            print(f"❌ Request failed: {e}")
+            return None
         except requests.exceptions.RequestException as e:
             print(f"❌ Request failed: {e}")
             return None
@@ -64,9 +84,49 @@ class StalkerClient:
             print(f"Response text: {response.text}")
             return None
     
+    def detect_api_path(self):
+        """Try to detect the correct API path for the portal."""
+        common_paths = [
+            'portal.php',
+            'server/load.php',
+            'stalker_portal/server/load.php',
+            'c/version.js',
+            'api/v1/',
+        ]
+        
+        print("🔍 Trying to detect the correct API endpoint...")
+        
+        for path in common_paths:
+            test_url = urljoin(self.portal_url + '/', path)
+            if self.debug:
+                print(f"🔍 DEBUG: Testing {test_url}")
+            
+            try:
+                # Try a simple request
+                response = self.session.get(test_url, timeout=5)
+                if response.status_code == 200:
+                    print(f"✅ Found working endpoint: {path}")
+                    self.api_path = path
+                    return path
+                elif self.debug:
+                    print(f"   Status {response.status_code}")
+            except Exception as e:
+                if self.debug:
+                    print(f"   Failed: {e}")
+                continue
+        
+        # Default to standard path
+        print("⚠️  Could not detect API path, using default: server/load.php")
+        self.api_path = 'server/load.php'
+        return self.api_path
+    
     def handshake(self):
         """Perform initial handshake with the portal."""
         print(f"🔄 Initiating handshake with {self.portal_url}...")
+        
+        # Auto-detect API path if not set
+        if not self.api_path:
+            self.detect_api_path()
         
         params = {
             'type': 'stb',
@@ -76,7 +136,7 @@ class StalkerClient:
             'JsHttpRequest': '1-xml'
         }
         
-        response = self._make_request('server/load.php', params)
+        response = self._make_request(self.api_path, params)
         
         if response and 'js' in response:
             js_data = response['js']
@@ -115,26 +175,39 @@ class StalkerClient:
             'JsHttpRequest': '1-xml'
         }
         
-        response = self._make_request('server/load.php', params)
+        response = self._make_request(self.api_path, params)
         
         if response and 'js' in response:
             js_data = response['js']
             print("✅ Authentication response received!")
             
-            # Display account information
+            # Interpret status codes
+            status_code = js_data.get('status')
+            msg = js_data.get('msg', '')
+            
+            if status_code == 1:
+                print(f"   📊 Status: 🟢 Active and Authorized")
+            elif status_code == 2:
+                print(f"   📊 Status: 🔴 Not Authorized (Authentication Pending)")
+                print(f"   ⚠️  This MAC address is not registered/authorized with the provider")
+            elif status_code == 0:
+                print(f"   📊 Status: 🟡 Inactive")
+            else:
+                print(f"   📊 Status: ⚪ Unknown (code: {status_code})")
+            
+            if msg:
+                print(f"   💬 Message: {msg}")
+            
+            # Display account information if available
             if 'phone' in js_data:
                 print(f"   📱 Phone: {js_data['phone']}")
             if 'fio' in js_data:
                 print(f"   👤 Name: {js_data['fio']}")
             if 'account' in js_data:
                 print(f"   💳 Account: {js_data['account']}")
-            if 'status' in js_data:
-                status = '🟢 Active' if js_data['status'] == '1' else '🔴 Inactive'
-                print(f"   📊 Status: {status}")
-            if 'msg' in js_data:
-                print(f"   💬 Message: {js_data['msg']}")
             
-            return True
+            # Return True only if status is 1 (authorized)
+            return status_code == 1
         else:
             print("❌ Authentication failed")
             return False
@@ -149,7 +222,7 @@ class StalkerClient:
             'JsHttpRequest': '1-xml'
         }
         
-        response = self._make_request('server/load.php', params)
+        response = self._make_request(self.api_path, params)
         
         if response and 'js' in response:
             print("✅ Profile information:")
@@ -169,7 +242,7 @@ class StalkerClient:
             'JsHttpRequest': '1-xml'
         }
         
-        response = self._make_request('server/load.php', params)
+        response = self._make_request(self.api_path, params)
         
         if response and 'js' in response:
             channels = response['js'].get('data', [])
@@ -197,7 +270,7 @@ class StalkerClient:
             'JsHttpRequest': '1-xml'
         }
         
-        response = self._make_request('server/load.php', params)
+        response = self._make_request(self.api_path, params)
         
         if response and 'js' in response:
             genres = response['js']
@@ -219,14 +292,31 @@ class StalkerClient:
         # Step 1: Handshake
         if not self.handshake():
             print("\n❌ Connection test failed at handshake")
+            print("   The portal may be offline or the URL is incorrect")
             return False
         
         print()
         time.sleep(1)
         
         # Step 2: Authenticate
-        if not self.authenticate():
-            print("\n❌ Connection test failed at authentication")
+        auth_success = self.authenticate()
+        
+        if not auth_success:
+            print()
+            print("="*60)
+            print("⚠️  Connection Test Result: PARTIAL SUCCESS")
+            print("="*60)
+            print()
+            print("✅ Portal connection: SUCCESS")
+            print("✅ Handshake: SUCCESS")
+            print("❌ MAC Authorization: FAILED")
+            print()
+            print("📌 Next Steps:")
+            print("   1. Verify your MAC address is correct")
+            print("   2. Contact your IPTV provider to register/activate this MAC")
+            print("   3. Ensure your subscription is active")
+            print("   4. Some providers require manual MAC address registration")
+            print()
             return False
         
         print()
@@ -351,6 +441,11 @@ def main():
     if not timezone:
         timezone = default_timezone
     
+    # Debug mode
+    print()
+    debug_choice = input("🐛 Enable debug mode? (y/n, default: n): ").strip().lower()
+    debug = debug_choice == 'y'
+    
     # Ask to save configuration if it's new or changed
     if not config or config.get('portal_url') != portal_url or \
        config.get('mac_address') != mac_address or config.get('timezone') != timezone:
@@ -362,7 +457,7 @@ def main():
     print()
     
     # Create client and test connection
-    client = StalkerClient(portal_url, mac_address, timezone)
+    client = StalkerClient(portal_url, mac_address, timezone, debug=debug)
     client.test_connection()
     
     print()
