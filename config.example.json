@@ -1,0 +1,9 @@
+# Example configuration file (optional)
+# Copy this to config.json and fill in your details
+
+{
+  "portal_url": "http://portal.example.com",
+  "mac_address": "00:1A:79:XX:XX:XX",
+  "timezone": "America/New_York"
+}
+

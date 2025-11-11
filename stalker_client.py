@@ -1,0 +1,311 @@
+#!/usr/bin/env python3
+"""
+Stalker Portal Test Client
+A simple console application to test connections with Stalker middleware portals.
+"""
+
+import requests
+import json
+import time
+import hashlib
+from urllib.parse import urljoin, quote
+
+
+class StalkerClient:
+    """Client for connecting to Stalker portal middleware."""
+    
+    def __init__(self, portal_url, mac_address, timezone="America/New_York"):
+        """
+        Initialize the Stalker client.
+        
+        Args:
+            portal_url: The base URL of the Stalker portal (e.g., http://portal.example.com)
+            mac_address: MAC address of the set-top-box (format: 00:1A:79:XX:XX:XX)
+            timezone: Timezone for the client
+        """
+        self.portal_url = portal_url.rstrip('/')
+        self.mac_address = mac_address.upper()
+        self.timezone = timezone
+        self.token = None
+        self.session = requests.Session()
+        
+        # Set up default headers
+        self.session.headers.update({
+            'User-Agent': 'Mozilla/5.0 (QtEmbedded; U; Linux; C) AppleWebKit/533.3 (KHTML, like Gecko) MAG200 stbapp ver: 2 rev: 250 Safari/533.3',
+            'Accept': '*/*',
+            'Accept-Encoding': 'gzip, deflate',
+            'Connection': 'keep-alive'
+        })
+    
+    def _make_request(self, endpoint, params=None):
+        """Make a request to the Stalker portal."""
+        url = urljoin(self.portal_url + '/', endpoint)
+        
+        if params is None:
+            params = {}
+        
+        # Add common parameters
+        params['type'] = params.get('type', 'stb')
+        params['action'] = params.get('action', 'handshake')
+        
+        if self.token:
+            params['token'] = self.token
+        
+        try:
+            response = self.session.get(url, params=params, timeout=10)
+            response.raise_for_status()
+            return response.json()
+        except requests.exceptions.RequestException as e:
+            print(f"❌ Request failed: {e}")
+            return None
+        except json.JSONDecodeError as e:
+            print(f"❌ Failed to parse JSON response: {e}")
+            print(f"Response text: {response.text}")
+            return None
+    
+    def handshake(self):
+        """Perform initial handshake with the portal."""
+        print(f"🔄 Initiating handshake with {self.portal_url}...")
+        
+        params = {
+            'type': 'stb',
+            'action': 'handshake',
+            'prehash': self.token if self.token else '',
+            'token': '',
+            'JsHttpRequest': '1-xml'
+        }
+        
+        response = self._make_request('server/load.php', params)
+        
+        if response and 'js' in response:
+            js_data = response['js']
+            if 'token' in js_data:
+                self.token = js_data['token']
+                print(f"✅ Handshake successful! Token received: {self.token[:20]}...")
+                return True
+            else:
+                print(f"❌ No token in response: {js_data}")
+                return False
+        else:
+            print(f"❌ Handshake failed")
+            return False
+    
+    def authenticate(self):
+        """Authenticate with the portal using MAC address."""
+        print(f"🔐 Authenticating with MAC address: {self.mac_address}...")
+        
+        params = {
+            'type': 'stb',
+            'action': 'get_profile',
+            'hd': '1',
+            'ver': 'ImageDescription: 0.2.18-r24-pub-250; ImageDate: Fri Dec 28 18:45:22 EET 2018; PORTAL version: 5.6.0; API Version: JS API version: 343; STB API version: 146; Player Engine version: 0x582',
+            'num_banks': '2',
+            'sn': self.mac_address.replace(':', ''),
+            'stb_type': 'MAG250',
+            'image_version': '218',
+            'auth_second_step': '0',
+            'hw_version': '1.7-BD-00',
+            'not_valid_token': '0',
+            'metrics': json.dumps({"mac": self.mac_address}),
+            'hw_version_2': 'a38a7c2b19ca1467a5e9fd29594d1877',
+            'timestamp': str(int(time.time())),
+            'api_signature': 'FF',
+            'prehash': self.token if self.token else '',
+            'JsHttpRequest': '1-xml'
+        }
+        
+        response = self._make_request('server/load.php', params)
+        
+        if response and 'js' in response:
+            js_data = response['js']
+            print("✅ Authentication response received!")
+            
+            # Display account information
+            if 'phone' in js_data:
+                print(f"   📱 Phone: {js_data['phone']}")
+            if 'fio' in js_data:
+                print(f"   👤 Name: {js_data['fio']}")
+            if 'account' in js_data:
+                print(f"   💳 Account: {js_data['account']}")
+            if 'status' in js_data:
+                status = '🟢 Active' if js_data['status'] == '1' else '🔴 Inactive'
+                print(f"   📊 Status: {status}")
+            if 'msg' in js_data:
+                print(f"   💬 Message: {js_data['msg']}")
+            
+            return True
+        else:
+            print("❌ Authentication failed")
+            return False
+    
+    def get_profile(self):
+        """Get profile information."""
+        print("📋 Fetching profile information...")
+        
+        params = {
+            'type': 'account_info',
+            'action': 'get_main_info',
+            'JsHttpRequest': '1-xml'
+        }
+        
+        response = self._make_request('server/load.php', params)
+        
+        if response and 'js' in response:
+            print("✅ Profile information:")
+            print(json.dumps(response['js'], indent=2))
+            return response['js']
+        else:
+            print("❌ Failed to get profile")
+            return None
+    
+    def get_all_channels(self):
+        """Get list of all channels."""
+        print("📺 Fetching channel list...")
+        
+        params = {
+            'type': 'itv',
+            'action': 'get_all_channels',
+            'JsHttpRequest': '1-xml'
+        }
+        
+        response = self._make_request('server/load.php', params)
+        
+        if response and 'js' in response:
+            channels = response['js'].get('data', [])
+            print(f"✅ Found {len(channels)} channels")
+            
+            # Display first 10 channels
+            for i, channel in enumerate(channels[:10]):
+                print(f"   {i+1}. {channel.get('name', 'Unknown')} (ID: {channel.get('id', 'N/A')})")
+            
+            if len(channels) > 10:
+                print(f"   ... and {len(channels) - 10} more channels")
+            
+            return channels
+        else:
+            print("❌ Failed to get channels")
+            return None
+    
+    def get_genres(self):
+        """Get list of genres."""
+        print("🎬 Fetching genres...")
+        
+        params = {
+            'type': 'itv',
+            'action': 'get_genres',
+            'JsHttpRequest': '1-xml'
+        }
+        
+        response = self._make_request('server/load.php', params)
+        
+        if response and 'js' in response:
+            genres = response['js']
+            print(f"✅ Found {len(genres)} genres:")
+            for genre in genres:
+                print(f"   - {genre.get('title', 'Unknown')} (ID: {genre.get('id', 'N/A')})")
+            return genres
+        else:
+            print("❌ Failed to get genres")
+            return None
+    
+    def test_connection(self):
+        """Run a full connection test."""
+        print("="*60)
+        print("🚀 Starting Stalker Portal Connection Test")
+        print("="*60)
+        print()
+        
+        # Step 1: Handshake
+        if not self.handshake():
+            print("\n❌ Connection test failed at handshake")
+            return False
+        
+        print()
+        time.sleep(1)
+        
+        # Step 2: Authenticate
+        if not self.authenticate():
+            print("\n❌ Connection test failed at authentication")
+            return False
+        
+        print()
+        time.sleep(1)
+        
+        # Step 3: Get profile (optional)
+        try:
+            self.get_profile()
+        except Exception as e:
+            print(f"⚠️  Profile fetch failed (non-critical): {e}")
+        
+        print()
+        time.sleep(1)
+        
+        # Step 4: Get genres
+        try:
+            self.get_genres()
+        except Exception as e:
+            print(f"⚠️  Genre fetch failed (non-critical): {e}")
+        
+        print()
+        time.sleep(1)
+        
+        # Step 5: Get channels
+        try:
+            self.get_all_channels()
+        except Exception as e:
+            print(f"⚠️  Channel fetch failed (non-critical): {e}")
+        
+        print()
+        print("="*60)
+        print("✅ Connection test completed successfully!")
+        print("="*60)
+        
+        return True
+
+
+def main():
+    """Main entry point for the console application."""
+    print()
+    print("╔════════════════════════════════════════════════════════════╗")
+    print("║          Stalker Portal Test Client v1.0                  ║")
+    print("║          Set-Top-Box Connection Validator                 ║")
+    print("╚════════════════════════════════════════════════════════════╝")
+    print()
+    
+    # Get user input
+    print("Please enter your connection details:")
+    print()
+    
+    portal_url = input("Portal URL (e.g., http://portal.example.com): ").strip()
+    if not portal_url:
+        print("❌ Portal URL is required!")
+        return
+    
+    mac_address = input("MAC Address (e.g., 00:1A:79:XX:XX:XX): ").strip()
+    if not mac_address:
+        print("❌ MAC address is required!")
+        return
+    
+    timezone = input("Timezone (default: America/New_York): ").strip()
+    if not timezone:
+        timezone = "America/New_York"
+    
+    print()
+    
+    # Create client and test connection
+    client = StalkerClient(portal_url, mac_address, timezone)
+    client.test_connection()
+    
+    print()
+
+
+if __name__ == "__main__":
+    try:
+        main()
+    except KeyboardInterrupt:
+        print("\n\n⚠️  Test interrupted by user")
+    except Exception as e:
+        print(f"\n\n❌ Unexpected error: {e}")
+        import traceback
+        traceback.print_exc()
+
