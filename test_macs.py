@@ -9,7 +9,7 @@ import time
 from stalker_client import StalkerClient, load_config
 
 
-def test_mac_address(portal_url, mac_address, timezone="America/New_York", verbose=False):
+def test_mac_address(portal_url, mac_address, timezone="America/New_York", verbose=False, max_retries=3):
     """
     Test a single MAC address against the portal.
     
@@ -24,7 +24,8 @@ def test_mac_address(portal_url, mac_address, timezone="America/New_York", verbo
         'status': None,
         'message': '',
         'authorized': False,
-        'details': {}
+        'details': {},
+        'rate_limited': False
     }
     
     try:
@@ -35,43 +36,62 @@ def test_mac_address(portal_url, mac_address, timezone="America/New_York", verbo
         
         result['handshake'] = True
         
-        # Authenticate
-        params = {
-            'type': 'stb',
-            'action': 'get_profile',
-            'hd': '1',
-            'ver': 'ImageDescription: 0.2.18-r24-pub-250; ImageDate: Fri Dec 28 18:45:22 EET 2018; PORTAL version: 5.6.0; API Version: JS API version: 343; STB API version: 146; Player Engine version: 0x582',
-            'num_banks': '2',
-            'sn': mac_address.replace(':', ''),
-            'stb_type': 'MAG250',
-            'image_version': '218',
-            'auth_second_step': '0',
-            'hw_version': '1.7-BD-00',
-            'not_valid_token': '0',
-            'metrics': '{"mac": "' + mac_address + '"}',
-            'hw_version_2': 'a38a7c2b19ca1467a5e9fd29594d1877',
-            'timestamp': str(int(time.time())),
-            'api_signature': 'FF',
-            'prehash': client.token if client.token else '',
-            'JsHttpRequest': '1-xml'
-        }
-        
-        response = client._make_request(client.api_path, params)
-        
-        if response and 'js' in response:
-            js_data = response['js']
-            result['status'] = js_data.get('status')
-            result['message'] = js_data.get('msg', '')
+        # Authenticate with retry logic
+        for attempt in range(max_retries):
+            params = {
+                'type': 'stb',
+                'action': 'get_profile',
+                'hd': '1',
+                'ver': 'ImageDescription: 0.2.18-r24-pub-250; ImageDate: Fri Dec 28 18:45:22 EET 2018; PORTAL version: 5.6.0; API Version: JS API version: 343; STB API version: 146; Player Engine version: 0x582',
+                'num_banks': '2',
+                'sn': mac_address.replace(':', ''),
+                'stb_type': 'MAG250',
+                'image_version': '218',
+                'auth_second_step': '0',
+                'hw_version': '1.7-BD-00',
+                'not_valid_token': '0',
+                'metrics': '{"mac": "' + mac_address + '"}',
+                'hw_version_2': 'a38a7c2b19ca1467a5e9fd29594d1877',
+                'timestamp': str(int(time.time())),
+                'api_signature': 'FF',
+                'prehash': client.token if client.token else '',
+                'JsHttpRequest': '1-xml'
+            }
             
-            # Status 1 = authorized
-            if result['status'] == 1:
-                result['authorized'] = True
-                result['details'] = {
-                    'phone': js_data.get('phone', ''),
-                    'name': js_data.get('fio', ''),
-                    'account': js_data.get('account', '')
-                }
+            response = client._make_request(client.api_path, params)
             
+            # Check if we got rate limited by looking at the response
+            if response is None:
+                # Could be rate limited, wait and retry
+                if attempt < max_retries - 1:
+                    backoff_time = 10 * (2 ** attempt)  # Exponential backoff: 10s, 20s, 40s
+                    print(f"   ⏳ Rate limited, waiting {backoff_time}s before retry...")
+                    time.sleep(backoff_time)
+                    continue
+                else:
+                    result['rate_limited'] = True
+                    result['message'] = 'Rate limited (max retries exceeded)'
+                    return result
+            
+            if response and 'js' in response:
+                js_data = response['js']
+                result['status'] = js_data.get('status')
+                result['message'] = js_data.get('msg', '')
+                
+                # Status 1 = authorized
+                if result['status'] == 1:
+                    result['authorized'] = True
+                    result['details'] = {
+                        'phone': js_data.get('phone', ''),
+                        'name': js_data.get('fio', ''),
+                        'account': js_data.get('account', '')
+                    }
+                
+                return result
+            
+            # If we didn't get a valid response but no rate limit, break
+            break
+        
         return result
         
     except Exception as e:
@@ -270,6 +290,8 @@ def main():
             print(f"⚠️  Not Authorized (Status: 2)")
         elif result['status'] == 0:
             print(f"❌ Inactive (Status: 0)")
+        elif result.get('rate_limited'):
+            print(f"⏱️  Rate Limited")
         elif not result['handshake']:
             print(f"❌ Handshake Failed")
         else:
@@ -288,6 +310,7 @@ def main():
     print(f"Authorized: {len(authorized_macs)}")
     print(f"Not authorized: {sum(1 for r in results if r['status'] == 2)}")
     print(f"Inactive: {sum(1 for r in results if r['status'] == 0)}")
+    print(f"Rate limited: {sum(1 for r in results if r.get('rate_limited'))}")
     print(f"Failed: {sum(1 for r in results if not r['handshake'])}")
     print()
     

@@ -68,6 +68,27 @@ class StalkerClient:
                 print(f"🔍 DEBUG: Response Headers: {dict(response.headers)}")
                 print(f"🔍 DEBUG: Response Text: {response.text[:500]}")
             
+            # Check for rate limiting
+            if response.status_code == 429:
+                retry_after = response.headers.get('Retry-After')
+                x_ratelimit_reset = response.headers.get('X-RateLimit-Reset')
+                x_ratelimit_remaining = response.headers.get('X-RateLimit-Remaining')
+                
+                if self.debug or True:  # Always show rate limit info
+                    print(f"⚠️  RATE LIMITED (429)")
+                    if retry_after:
+                        print(f"   Retry-After: {retry_after} seconds")
+                    if x_ratelimit_reset:
+                        print(f"   X-RateLimit-Reset: {x_ratelimit_reset}")
+                    if x_ratelimit_remaining:
+                        print(f"   X-RateLimit-Remaining: {x_ratelimit_remaining}")
+                    
+                    # Print all headers that might contain rate limit info
+                    print(f"   All headers:")
+                    for key, value in response.headers.items():
+                        if 'rate' in key.lower() or 'limit' in key.lower() or 'retry' in key.lower():
+                            print(f"     {key}: {value}")
+            
             response.raise_for_status()
             return response.json()
         except requests.exceptions.HTTPError as e:
