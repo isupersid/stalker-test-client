@@ -41,3 +41,8 @@ config.json
 credentials.json
 *.local
 
+# MAC address lists
+macs.txt
+authorized_macs.txt
+*.macs
+

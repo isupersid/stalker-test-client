@@ -1,0 +1,14 @@
+# Example MAC addresses file
+# One MAC address per line
+# Lines starting with # are ignored
+
+# Format examples (all valid):
+# 00:1A:79:16:BA:3E
+# 00-1A-79-16-BA-3E
+# 001A7916BA3E
+
+# Your MACs here:
+00:1A:79:16:BA:3E
+00:1A:79:16:BA:3F
+00:1A:79:16:BA:40
+

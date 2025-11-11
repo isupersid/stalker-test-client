@@ -57,6 +57,44 @@ The application will automatically:
 
 **Note**: `config.json` is ignored by git to keep your credentials safe!
 
+### Testing Multiple MAC Addresses
+
+Use the batch MAC tester to test multiple MAC addresses:
+
+```bash
+python test_macs.py
+```
+
+This utility offers three input methods:
+
+1. **Manual Entry**: Type MAC addresses one per line
+2. **From File**: Load from a text file (e.g., `macs.txt`)
+3. **Generate Range**: Automatically generate a range (e.g., `00:1A:79:16:BA:00` to `00:1A:79:16:BA:FF`)
+
+**Example file format** (`macs.txt`):
+```
+# One MAC per line
+00:1A:79:16:BA:3E
+00:1A:79:16:BA:3F
+00:1A:79:16:BA:40
+```
+
+The tool will:
+- ✅ Show which MACs are authorized (Status 1)
+- ⚠️ Show which need authorization (Status 2)
+- ❌ Show inactive MACs (Status 0)
+- 💾 Offer to save authorized MACs to a file
+
+### Testing Portal Endpoints
+
+To quickly discover available API endpoints:
+
+```bash
+python test_portal.py http://portal.example.com
+```
+
+This shows which endpoints respond and helps diagnose connection issues.
+
 ### Programmatic Usage
 
 You can also use the client as a Python module:
