@@ -200,7 +200,12 @@ class StalkerClient:
         
         if response and 'js' in response:
             js_data = response['js']
-            print("✅ Authentication response received!")
+            
+            if self.debug:
+                print("✅ Authentication response received!")
+                print(f"   Full response: {json.dumps(js_data, indent=2)}")
+            else:
+                print("✅ Authentication response received!")
             
             # Interpret status codes
             status_code = js_data.get('status')
@@ -219,6 +224,19 @@ class StalkerClient:
             if msg:
                 print(f"   💬 Message: {msg}")
             
+            # Display additional info if available
+            if js_data.get('info'):
+                print(f"   ℹ️  Info: {js_data['info']}")
+            
+            if js_data.get('template'):
+                print(f"   🎨 Template: {js_data['template']}")
+            
+            if js_data.get('launcher_url'):
+                print(f"   🔗 Launcher URL: {js_data['launcher_url']}")
+            
+            if js_data.get('launcher_profile_url'):
+                print(f"   🔗 Launcher Profile: {js_data['launcher_profile_url']}")
+            
             # Display account information if available
             if 'phone' in js_data:
                 print(f"   📱 Phone: {js_data['phone']}")
@@ -226,6 +244,14 @@ class StalkerClient:
                 print(f"   👤 Name: {js_data['fio']}")
             if 'account' in js_data:
                 print(f"   💳 Account: {js_data['account']}")
+            
+            # Show any other fields not explicitly handled
+            if self.debug:
+                known_fields = {'status', 'msg', 'info', 'template', 'launcher_url', 
+                               'launcher_profile_url', 'phone', 'fio', 'account'}
+                other_fields = {k: v for k, v in js_data.items() if k not in known_fields}
+                if other_fields:
+                    print(f"   🔍 Other fields: {json.dumps(other_fields, indent=2)}")
             
             # Return True only if status is 1 (authorized)
             return status_code == 1
