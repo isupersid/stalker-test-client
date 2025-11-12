@@ -247,9 +247,18 @@ class StalkerClient:
             # Interpret status codes
             status_code = js_data.get('status')
             msg = js_data.get('msg', '')
+            block_msg = js_data.get('block_msg', '')
             
             # Check if we got full profile (indicates successful auth)
             has_profile_data = 'login' in js_data or 'fname' in js_data or 'expire_billing_date' in js_data
+            
+            # Check for error conditions (device conflict, blocking messages, etc.)
+            has_error = (
+                'conflict' in msg.lower() or 
+                'mismatch' in msg.lower() or
+                block_msg or
+                ('Authentication request' in msg and not has_profile_data)
+            )
             
             if has_profile_data:
                 print(f"   📊 Status: 🟢 Successfully Authenticated!")
@@ -263,6 +272,19 @@ class StalkerClient:
                     print(f"   📅 Expiry date: {js_data['expirydate']}")
                 # Return True for successful authentication
                 return True
+            elif has_error:
+                # Error condition - show as error even if status is 1
+                if 'conflict' in msg.lower() or 'mismatch' in msg.lower():
+                    print(f"   📊 Status: 🔴 Device Conflict")
+                    print(f"   ⚠️  The device parameters don't match what's registered")
+                    if block_msg:
+                        print(f"   🚫 {block_msg.replace('<br>', ' ')}")
+                elif block_msg:
+                    print(f"   📊 Status: 🔴 Blocked")
+                    print(f"   🚫 {block_msg.replace('<br>', ' ')}")
+                else:
+                    print(f"   📊 Status: 🔴 Not Authorized (Authentication Pending)")
+                    print(f"   ⚠️  This MAC address is not registered/authorized with the provider")
             elif status_code == 1 or (isinstance(status_code, str) and status_code == "1"):
                 print(f"   📊 Status: 🟢 Active and Authorized")
             elif status_code == 2 or (isinstance(status_code, str) and status_code == "2"):
@@ -302,13 +324,14 @@ class StalkerClient:
             if self.debug:
                 known_fields = {'status', 'msg', 'info', 'template', 'launcher_url', 
                                'launcher_profile_url', 'phone', 'fio', 'account', 
-                               'login', 'fname', 'expire_billing_date', 'expirydate'}
+                               'login', 'fname', 'expire_billing_date', 'expirydate', 'block_msg'}
                 other_fields = {k: v for k, v in js_data.items() if k not in known_fields and not isinstance(v, (dict, list))}
                 if other_fields:
                     print(f"   🔍 Other fields: {json.dumps(other_fields, indent=2)}")
             
-            # Return True if we have profile data (successful auth) or status is 1
-            return has_profile_data or status_code == 1 or (isinstance(status_code, str) and status_code == "1")
+            # Return True only if we have profile data (successful auth) and no errors
+            # Status 1 alone is not enough - need profile data or explicitly no errors
+            return has_profile_data and not has_error
         else:
             print("❌ Authentication failed")
             return False

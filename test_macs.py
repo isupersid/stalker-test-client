@@ -73,11 +73,20 @@ def test_mac_address(portal_url, mac_address, timezone="America/New_York", verbo
                 js_data = response['js']
                 result['status'] = js_data.get('status')
                 result['message'] = js_data.get('msg', '')
+                block_msg = js_data.get('block_msg', '')
                 
                 # Check if we got full profile (indicates successful auth)
                 has_profile_data = 'login' in js_data or 'fname' in js_data or 'expire_billing_date' in js_data
                 
-                if has_profile_data:
+                # Check for error conditions (device conflict, blocking messages, etc.)
+                has_error = (
+                    'conflict' in result['message'].lower() or 
+                    'mismatch' in result['message'].lower() or
+                    block_msg or
+                    ('Authentication request' in result['message'] and not has_profile_data)
+                )
+                
+                if has_profile_data and not has_error:
                     result['authorized'] = True
                     result['details'] = {
                         'phone': js_data.get('phone', ''),
@@ -85,13 +94,20 @@ def test_mac_address(portal_url, mac_address, timezone="America/New_York", verbo
                         'account': js_data.get('account', ''),
                         'expiry': js_data.get('expire_billing_date', '') or js_data.get('expirydate', '')
                     }
+                elif has_error:
+                    # Mark as not authorized if there's an error condition
+                    result['authorized'] = False
+                    if block_msg:
+                        result['message'] = f"{result['message']} - {block_msg}"
                 elif result['status'] == 1 or (isinstance(result['status'], str) and result['status'] == "1"):
-                    result['authorized'] = True
-                    result['details'] = {
-                        'phone': js_data.get('phone', ''),
-                        'name': js_data.get('fio', ''),
-                        'account': js_data.get('account', '')
-                    }
+                    # Only treat status 1 as authorized if no errors
+                    if not has_error:
+                        result['authorized'] = True
+                        result['details'] = {
+                            'phone': js_data.get('phone', ''),
+                            'name': js_data.get('fio', ''),
+                            'account': js_data.get('account', '')
+                        }
                 
                 return result
             
@@ -303,6 +319,10 @@ def main():
                 print(f"           Account: {result['details']['account']}")
             if result['details'].get('expiry'):
                 print(f"           Expires: {result['details']['expiry']}")
+        elif 'conflict' in result['message'].lower() or 'mismatch' in result['message'].lower():
+            print(f"🔴 Device Conflict (Status: {result['status']})")
+            if result['message']:
+                print(f"           {result['message']}")
         elif result['status'] == 2 or (isinstance(result['status'], str) and result['status'] == "2"):
             print(f"⚠️  Not Authorized (Status: 2)")
         elif result['status'] == 0 or (isinstance(result['status'], str) and result['status'] == "0"):
@@ -314,6 +334,8 @@ def main():
             print(f"❌ Handshake Failed")
         else:
             print(f"❓ Unknown (Status: {result['status']})")
+            if result['message']:
+                print(f"           {result['message']}")
         
         # Small delay to avoid overwhelming the server
         if i < len(macs):
