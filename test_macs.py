@@ -9,17 +9,18 @@ import time
 from stalker_client import StalkerClient, load_config
 
 
-def test_mac_address(portal_url, mac_address, timezone="America/New_York", verbose=False, max_retries=3, api_path=None):
+def test_mac_address(portal_url, mac_address, timezone="America/New_York", verbose=False, max_retries=3, api_path=None, serial_number=None):
     """
     Test a single MAC address against the portal.
     
     Args:
         api_path: Pre-detected API path to avoid re-detection for each MAC
+        serial_number: Custom serial number (defaults to MAC without colons)
     
     Returns:
         dict: Result with status, message, and other details
     """
-    client = StalkerClient(portal_url, mac_address, timezone, api_path=api_path, debug=False)
+    client = StalkerClient(portal_url, mac_address, timezone, api_path=api_path, debug=False, serial_number=serial_number)
     
     result = {
         'mac': mac_address,
@@ -39,24 +40,13 @@ def test_mac_address(portal_url, mac_address, timezone="America/New_York", verbo
         
         result['handshake'] = True
         
-        # Authenticate with retry logic
+        # Authenticate with retry logic (using minimal params)
         for attempt in range(max_retries):
             params = {
                 'type': 'stb',
                 'action': 'get_profile',
-                'hd': '1',
-                'ver': 'ImageDescription: 0.2.18-r24-pub-250; ImageDate: Fri Dec 28 18:45:22 EET 2018; PORTAL version: 5.6.0; API Version: JS API version: 343; STB API version: 146; Player Engine version: 0x582',
-                'num_banks': '2',
-                'sn': mac_address.replace(':', ''),
-                'stb_type': 'MAG250',
-                'image_version': '218',
-                'auth_second_step': '0',
-                'hw_version': '1.7-BD-00',
-                'not_valid_token': '0',
-                'metrics': '{"mac": "' + mac_address + '"}',
-                'hw_version_2': 'a38a7c2b19ca1467a5e9fd29594d1877',
-                'timestamp': str(int(time.time())),
-                'api_signature': 'FF',
+                'sn': client.serial_number,
+                'mac': client.mac_address,
                 'prehash': client.token if client.token else '',
                 'JsHttpRequest': '1-xml'
             }
@@ -81,8 +71,18 @@ def test_mac_address(portal_url, mac_address, timezone="America/New_York", verbo
                 result['status'] = js_data.get('status')
                 result['message'] = js_data.get('msg', '')
                 
-                # Status 1 = authorized
-                if result['status'] == 1:
+                # Check if we got full profile (indicates successful auth)
+                has_profile_data = 'login' in js_data or 'fname' in js_data or 'expire_billing_date' in js_data
+                
+                if has_profile_data:
+                    result['authorized'] = True
+                    result['details'] = {
+                        'phone': js_data.get('phone', ''),
+                        'name': js_data.get('fname', '') or js_data.get('login', ''),
+                        'account': js_data.get('account', ''),
+                        'expiry': js_data.get('expire_billing_date', '') or js_data.get('expirydate', '')
+                    }
+                elif result['status'] == 1 or (isinstance(result['status'], str) and result['status'] == "1"):
                     result['authorized'] = True
                     result['details'] = {
                         'phone': js_data.get('phone', ''),
@@ -298,9 +298,12 @@ def main():
                 print(f"           Name: {result['details']['name']}")
             if result['details'].get('account'):
                 print(f"           Account: {result['details']['account']}")
-        elif result['status'] == 2:
+            if result['details'].get('expiry'):
+                print(f"           Expires: {result['details']['expiry']}")
+        elif result['status'] == 2 or (isinstance(result['status'], str) and result['status'] == "2"):
             print(f"⚠️  Not Authorized (Status: 2)")
-        elif result['status'] == 0:
+        elif result['status'] == 0 or (isinstance(result['status'], str) and result['status'] == "0"):
+            # Status 0 without profile data means inactive
             print(f"❌ Inactive (Status: 0)")
         elif result.get('rate_limited'):
             print(f"⏱️  Rate Limited")
@@ -337,6 +340,8 @@ def main():
                         print(f"      Name: {r['details']['name']}")
                     if r['details'].get('account'):
                         print(f"      Account: {r['details']['account']}")
+                    if r['details'].get('expiry'):
+                        print(f"      Expires: {r['details']['expiry']}")
         print()
         
         # Offer to save
