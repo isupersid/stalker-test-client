@@ -1,5 +1,6 @@
-# Example configuration file (optional)
+# Example configuration file
 # Copy this to config.json and fill in your details
+# All fields are optional except portal_url and mac_address
 
 {
   "portal_url": "http://portal.example.com",
@@ -7,4 +8,22 @@
   "timezone": "America/New_York",
   "serial_number": "optional-custom-serial-number"
 }
+
+# Available configuration options:
+# 
+# portal_url (required): The base URL of your Stalker portal
+#   Example: "http://portal.example.com"
+#   Example: "http://8k.iristv.cc"
+#
+# mac_address (required): MAC address of your set-top-box
+#   Format: "XX:XX:XX:XX:XX:XX"
+#   Example: "00:1A:79:16:BA:3E"
+#
+# timezone (optional): Your timezone
+#   Default: "America/New_York"
+#   Examples: "Europe/London", "Asia/Dubai", "America/Los_Angeles"
+#
+# serial_number (optional): Custom serial number
+#   Default: MAC address without colons
+#   Example: "001A7916BA3E" or "MY-CUSTOM-SERIAL"
 
