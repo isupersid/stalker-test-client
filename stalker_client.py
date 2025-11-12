@@ -15,7 +15,7 @@ from urllib.parse import urljoin, quote
 class StalkerClient:
     """Client for connecting to Stalker portal middleware."""
     
-    def __init__(self, portal_url, mac_address, timezone="America/New_York", api_path=None, debug=False, serial_number=None):
+    def __init__(self, portal_url, mac_address, timezone="America/New_York", api_path=None, debug=False, serial_number=None, minimal_params=False):
         """
         Initialize the Stalker client.
         
@@ -26,6 +26,7 @@ class StalkerClient:
             api_path: Custom API path (default: tries common paths automatically)
             debug: Enable debug output
             serial_number: Custom serial number (default: MAC without colons)
+            minimal_params: Use minimal parameters only (default: False)
         """
         self.portal_url = portal_url.rstrip('/')
         self.mac_address = mac_address.upper()
@@ -34,6 +35,7 @@ class StalkerClient:
         self.session = requests.Session()
         self.debug = debug
         self.api_path = api_path
+        self.minimal_params = minimal_params
         
         # Serial number: use custom if provided, otherwise MAC without colons
         self.serial_number = serial_number if serial_number else self.mac_address.replace(':', '')
@@ -185,26 +187,39 @@ class StalkerClient:
         if self.debug:
             print(f"🔐 Authenticating with MAC address: {self.mac_address}...")
             print(f"   Serial Number: {self.serial_number}")
+            print(f"   Minimal params: {self.minimal_params}")
         
-        params = {
-            'type': 'stb',
-            'action': 'get_profile',
-            'hd': '1',
-            'ver': 'ImageDescription: 0.2.18-r24-pub-250; ImageDate: Fri Dec 28 18:45:22 EET 2018; PORTAL version: 5.6.0; API Version: JS API version: 343; STB API version: 146; Player Engine version: 0x582',
-            'num_banks': '2',
-            'sn': self.serial_number,
-            'stb_type': 'MAG250',
-            'image_version': '218',
-            'auth_second_step': '0',
-            'hw_version': '1.7-BD-00',
-            'not_valid_token': '0',
-            'metrics': json.dumps({"mac": self.mac_address}),
-            'hw_version_2': 'a38a7c2b19ca1467a5e9fd29594d1877',
-            'timestamp': str(int(time.time())),
-            'api_signature': 'FF',
-            'prehash': self.token if self.token else '',
-            'JsHttpRequest': '1-xml'
-        }
+        if self.minimal_params:
+            # Minimal parameters - only essentials
+            params = {
+                'type': 'stb',
+                'action': 'get_profile',
+                'sn': self.serial_number,
+                'mac': self.mac_address,
+                'prehash': self.token if self.token else '',
+                'JsHttpRequest': '1-xml'
+            }
+        else:
+            # Full parameters - mimics MAG250 STB
+            params = {
+                'type': 'stb',
+                'action': 'get_profile',
+                'hd': '1',
+                'ver': 'ImageDescription: 0.2.18-r24-pub-250; ImageDate: Fri Dec 28 18:45:22 EET 2018; PORTAL version: 5.6.0; API Version: JS API version: 343; STB API version: 146; Player Engine version: 0x582',
+                'num_banks': '2',
+                'sn': self.serial_number,
+                'stb_type': 'MAG250',
+                'image_version': '218',
+                'auth_second_step': '0',
+                'hw_version': '1.7-BD-00',
+                'not_valid_token': '0',
+                'metrics': json.dumps({"mac": self.mac_address}),
+                'hw_version_2': 'a38a7c2b19ca1467a5e9fd29594d1877',
+                'timestamp': str(int(time.time())),
+                'api_signature': 'FF',
+                'prehash': self.token if self.token else '',
+                'JsHttpRequest': '1-xml'
+            }
         
         response = self._make_request(self.api_path, params)
         
@@ -486,6 +501,11 @@ def main():
         if not serial_number:
             serial_number = None
     
+    # Minimal parameters mode
+    print()
+    minimal_choice = input("🔧 Use minimal parameters? (y/n, default: n): ").strip().lower()
+    minimal_params = minimal_choice == 'y'
+    
     # Debug mode
     print()
     debug_choice = input("🐛 Enable debug mode? (y/n, default: n): ").strip().lower()
@@ -503,7 +523,7 @@ def main():
     print()
     
     # Create client and test connection
-    client = StalkerClient(portal_url, mac_address, timezone, debug=debug, serial_number=serial_number)
+    client = StalkerClient(portal_url, mac_address, timezone, debug=debug, serial_number=serial_number, minimal_params=minimal_params)
     client.test_connection()
     
     print()
