@@ -434,37 +434,22 @@ class StalkerClient:
             print()
             return False
         
-        print()
-        time.sleep(1)
-        
-        # Step 3: Get profile (optional)
-        try:
-            self.get_profile()
-        except Exception as e:
-            print(f"⚠️  Profile fetch failed (non-critical): {e}")
-        
-        print()
-        time.sleep(1)
-        
-        # Step 4: Get genres
-        try:
-            self.get_genres()
-        except Exception as e:
-            print(f"⚠️  Genre fetch failed (non-critical): {e}")
-        
-        print()
-        time.sleep(1)
-        
-        # Step 5: Get channels
-        try:
-            self.get_all_channels()
-        except Exception as e:
-            print(f"⚠️  Channel fetch failed (non-critical): {e}")
-        
+        # Authentication successful - profile data already received
         print()
         print("="*60)
         print("✅ Connection test completed successfully!")
         print("="*60)
+        print()
+        print("📊 Summary:")
+        print("   ✅ Portal connection")
+        print("   ✅ API endpoint detection")
+        print("   ✅ Handshake")
+        print("   ✅ Authentication")
+        print("   ✅ Profile data retrieved")
+        print()
+        print("💡 Note: Authentication already returned full profile.")
+        print("   Additional API calls (genres, channels) can be made separately if needed.")
+        print()
         
         return True
 
