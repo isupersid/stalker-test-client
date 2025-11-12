@@ -62,15 +62,18 @@ class StalkerClient:
         
         if self.debug:
             print(f"🔍 DEBUG: Request URL: {url}")
-            print(f"🔍 DEBUG: Params: {params}")
+            print(f"🔍 DEBUG: Params:")
+            print(json.dumps(params, indent=2))
         
         try:
             response = self.session.get(url, params=params, timeout=10)
             
             if self.debug:
                 print(f"🔍 DEBUG: Status Code: {response.status_code}")
-                print(f"🔍 DEBUG: Response Headers: {dict(response.headers)}")
-                print(f"🔍 DEBUG: Response Text: {response.text[:500]}")
+                print(f"🔍 DEBUG: Response Headers:")
+                print(json.dumps(dict(response.headers), indent=2))
+                print(f"🔍 DEBUG: Response Text (first 500 chars):")
+                print(response.text[:500])
             
             # Check for rate limiting
             if response.status_code == 429:
@@ -295,12 +298,22 @@ class StalkerClient:
             channels = response['js'].get('data', [])
             print(f"✅ Found {len(channels)} channels")
             
-            # Display first 10 channels
-            for i, channel in enumerate(channels[:10]):
-                print(f"   {i+1}. {channel.get('name', 'Unknown')} (ID: {channel.get('id', 'N/A')})")
+            # Display first 10 channels with formatted output
+            if channels:
+                print("\n   First 10 channels:")
+                for i, channel in enumerate(channels[:10]):
+                    name = channel.get('name', 'Unknown')
+                    ch_id = channel.get('id', 'N/A')
+                    number = channel.get('number', 'N/A')
+                    print(f"   {i+1:2d}. {name:40s} | ID: {ch_id:5s} | #: {number}")
+                
+                if len(channels) > 10:
+                    print(f"\n   ... and {len(channels) - 10} more channels")
+                    print(f"   💡 Enable debug mode to see full channel data")
             
-            if len(channels) > 10:
-                print(f"   ... and {len(channels) - 10} more channels")
+            if self.debug and channels:
+                print("\n   Full channel data (first 3):")
+                print(json.dumps(channels[:3], indent=2))
             
             return channels
         else:
@@ -321,9 +334,18 @@ class StalkerClient:
         
         if response and 'js' in response:
             genres = response['js']
-            print(f"✅ Found {len(genres)} genres:")
+            print(f"✅ Found {len(genres)} genres:\n")
+            
             for genre in genres:
-                print(f"   - {genre.get('title', 'Unknown')} (ID: {genre.get('id', 'N/A')})")
+                title = genre.get('title', 'Unknown')
+                genre_id = genre.get('id', 'N/A')
+                alias = genre.get('alias', 'N/A')
+                print(f"   - {title:30s} | ID: {genre_id:5s} | Alias: {alias}")
+            
+            if self.debug and genres:
+                print("\n   Full genre data:")
+                print(json.dumps(genres, indent=2))
+            
             return genres
         else:
             print("❌ Failed to get genres")
