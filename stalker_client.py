@@ -15,7 +15,7 @@ from urllib.parse import urljoin, quote
 class StalkerClient:
     """Client for connecting to Stalker portal middleware."""
     
-    def __init__(self, portal_url, mac_address, timezone="America/New_York", api_path=None, debug=False):
+    def __init__(self, portal_url, mac_address, timezone="America/New_York", api_path=None, debug=False, serial_number=None):
         """
         Initialize the Stalker client.
         
@@ -25,6 +25,7 @@ class StalkerClient:
             timezone: Timezone for the client
             api_path: Custom API path (default: tries common paths automatically)
             debug: Enable debug output
+            serial_number: Custom serial number (default: MAC without colons)
         """
         self.portal_url = portal_url.rstrip('/')
         self.mac_address = mac_address.upper()
@@ -33,6 +34,9 @@ class StalkerClient:
         self.session = requests.Session()
         self.debug = debug
         self.api_path = api_path
+        
+        # Serial number: use custom if provided, otherwise MAC without colons
+        self.serial_number = serial_number if serial_number else self.mac_address.replace(':', '')
         
         # Set up default headers
         self.session.headers.update({
@@ -178,7 +182,9 @@ class StalkerClient:
     
     def authenticate(self):
         """Authenticate with the portal using MAC address."""
-        print(f"🔐 Authenticating with MAC address: {self.mac_address}...")
+        if self.debug:
+            print(f"🔐 Authenticating with MAC address: {self.mac_address}...")
+            print(f"   Serial Number: {self.serial_number}")
         
         params = {
             'type': 'stb',
@@ -186,7 +192,7 @@ class StalkerClient:
             'hd': '1',
             'ver': 'ImageDescription: 0.2.18-r24-pub-250; ImageDate: Fri Dec 28 18:45:22 EET 2018; PORTAL version: 5.6.0; API Version: JS API version: 343; STB API version: 146; Player Engine version: 0x582',
             'num_banks': '2',
-            'sn': self.mac_address.replace(':', ''),
+            'sn': self.serial_number,
             'stb_type': 'MAG250',
             'image_version': '218',
             'auth_second_step': '0',
@@ -396,13 +402,16 @@ def load_config(config_path="config.json"):
     return {}
 
 
-def save_config(portal_url, mac_address, timezone, config_path="config.json"):
+def save_config(portal_url, mac_address, timezone, serial_number=None, config_path="config.json"):
     """Save configuration to JSON file."""
     config = {
         "portal_url": portal_url,
         "mac_address": mac_address,
         "timezone": timezone
     }
+    
+    if serial_number:
+        config["serial_number"] = serial_number
     
     try:
         with open(config_path, 'w') as f:
@@ -466,6 +475,17 @@ def main():
     if not timezone:
         timezone = default_timezone
     
+    # Serial Number (optional)
+    if config.get('serial_number'):
+        prompt = f"Serial Number (optional) [{config['serial_number']}]: "
+        serial_number = input(prompt).strip()
+        if not serial_number:
+            serial_number = config['serial_number']
+    else:
+        serial_number = input("Serial Number (optional, defaults to MAC without colons): ").strip()
+        if not serial_number:
+            serial_number = None
+    
     # Debug mode
     print()
     debug_choice = input("🐛 Enable debug mode? (y/n, default: n): ").strip().lower()
@@ -473,16 +493,17 @@ def main():
     
     # Ask to save configuration if it's new or changed
     if not config or config.get('portal_url') != portal_url or \
-       config.get('mac_address') != mac_address or config.get('timezone') != timezone:
+       config.get('mac_address') != mac_address or config.get('timezone') != timezone or \
+       config.get('serial_number') != serial_number:
         print()
         save_choice = input("💾 Save these settings to config.json? (y/n): ").strip().lower()
         if save_choice == 'y':
-            save_config(portal_url, mac_address, timezone)
+            save_config(portal_url, mac_address, timezone, serial_number)
     
     print()
     
     # Create client and test connection
-    client = StalkerClient(portal_url, mac_address, timezone, debug=debug)
+    client = StalkerClient(portal_url, mac_address, timezone, debug=debug, serial_number=serial_number)
     client.test_connection()
     
     print()

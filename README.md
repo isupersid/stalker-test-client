@@ -46,9 +46,16 @@ To avoid entering your credentials each time, you can create a `config.json` fil
 {
   "portal_url": "http://portal.example.com",
   "mac_address": "00:1A:79:XX:XX:XX",
-  "timezone": "America/New_York"
+  "timezone": "America/New_York",
+  "serial_number": "optional-custom-serial"
 }
 ```
+
+**Configuration Options:**
+- `portal_url` (required): Portal URL
+- `mac_address` (required): STB MAC address  
+- `timezone` (optional): Defaults to `America/New_York`
+- `serial_number` (optional): Custom serial number (defaults to MAC without colons)
 
 The application will automatically:
 1. Load settings from `config.json` if it exists
