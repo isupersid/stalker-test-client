@@ -35,8 +35,9 @@ class StalkerClient:
         self.debug = debug
         self.api_path = api_path
         
-        # Serial number: use custom if provided, otherwise MAC without colons
-        self.serial_number = serial_number if serial_number else self.mac_address.replace(':', '')
+        # Serial number: only set if explicitly provided
+        self.serial_number = serial_number
+        self._serial_number_explicit = serial_number is not None
         
         # Set up default headers (like Go implementation)
         self.session.headers.update({
@@ -50,7 +51,8 @@ class StalkerClient:
         # Set cookies (like Go implementation)
         self.session.cookies.set('PHPSESSID', 'null')  # Important: set to 'null' initially
         self.session.cookies.set('mac', self.mac_address)
-        self.session.cookies.set('sn', self.serial_number)
+        if self._serial_number_explicit:
+            self.session.cookies.set('sn', self.serial_number)
         self.session.cookies.set('stb_lang', 'en')
         self.session.cookies.set('timezone', self.timezone)
     
@@ -214,19 +216,22 @@ class StalkerClient:
     
     def authenticate(self):
         """Authenticate with the portal using MAC address."""
-        if self.debug:
-            print(f"🔐 Authenticating with MAC address: {self.mac_address}...")
+        print(f"🔐 Authenticating with MAC address: {self.mac_address}...")
+        if self._serial_number_explicit:
             print(f"   Serial Number: {self.serial_number}")
         
         # Minimal parameters - only essentials
         params = {
             'type': 'stb',
             'action': 'get_profile',
-            'sn': self.serial_number,
             'mac': self.mac_address,
             'prehash': self.token if self.token else '',
             'JsHttpRequest': '1-xml'
         }
+        
+        # Only add sn if explicitly set
+        if self._serial_number_explicit:
+            params['sn'] = self.serial_number
         
         response = self._make_request(self.api_path, params)
         

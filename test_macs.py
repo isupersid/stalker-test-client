@@ -15,7 +15,7 @@ def test_mac_address(portal_url, mac_address, timezone="America/New_York", verbo
     
     Args:
         api_path: Pre-detected API path to avoid re-detection for each MAC
-        serial_number: Custom serial number (defaults to MAC without colons)
+        serial_number: Optional custom serial number (only sent if provided)
     
     Returns:
         dict: Result with status, message, and other details
@@ -45,11 +45,14 @@ def test_mac_address(portal_url, mac_address, timezone="America/New_York", verbo
             params = {
                 'type': 'stb',
                 'action': 'get_profile',
-                'sn': client.serial_number,
                 'mac': client.mac_address,
                 'prehash': client.token if client.token else '',
                 'JsHttpRequest': '1-xml'
             }
+            
+            # Only add sn if explicitly set
+            if client._serial_number_explicit:
+                params['sn'] = client.serial_number
             
             response = client._make_request(client.api_path, params)
             
