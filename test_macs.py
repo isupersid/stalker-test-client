@@ -30,7 +30,8 @@ def test_mac_address(portal_url, mac_address, timezone="America/New_York", verbo
         'authorized': False,
         'details': {},
         'rate_limited': False,
-        'was_rate_limited': False  # Track if rate limiting occurred at any point
+        'was_rate_limited': False,  # Track if rate limiting occurred at any point
+        'retry_wait_time': 0  # Track total time spent waiting for retries
     }
     
     try:
@@ -65,6 +66,7 @@ def test_mac_address(portal_url, mac_address, timezone="America/New_York", verbo
                 # Could be rate limited, wait and retry
                 if attempt < max_retries - 1:
                     backoff_time = 10 * (2 ** attempt)  # Exponential backoff: 10s, 20s, 40s
+                    result['retry_wait_time'] += backoff_time
                     print(f"   ⏳ Rate limited, waiting {backoff_time}s before retry...")
                     time.sleep(backoff_time)
                     continue
@@ -342,8 +344,17 @@ def main():
                 print(f"           {result['message']}")
         
         # Small delay to avoid overwhelming the server
+        # Skip delay if we just waited for retries (already waited enough)
         if i < len(macs):
-            time.sleep(delay)
+            if result.get('retry_wait_time', 0) > 0:
+                # We already waited during retry, skip or reduce the delay
+                remaining_delay = max(0, delay - result['retry_wait_time'])
+                if remaining_delay > 0:
+                    time.sleep(remaining_delay)
+                # else: skip delay entirely, we waited enough
+            else:
+                # Normal delay between requests
+                time.sleep(delay)
     
     # Summary
     print()
