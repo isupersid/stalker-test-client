@@ -50,6 +50,7 @@ class StalkerClient:
         })
         
         # Set cookies (like Go implementation)
+        self.session.cookies.set('PHPSESSID', 'null')  # Important: set to 'null' initially
         self.session.cookies.set('mac', self.mac_address)
         self.session.cookies.set('sn', self.serial_number)
         self.session.cookies.set('stb_lang', 'en')
@@ -183,10 +184,26 @@ class StalkerClient:
         
         if response and 'js' in response:
             js_data = response['js']
-            if 'token' in js_data:
-                self.token = js_data['token']
+            
+            # Handle case where js is an array (empty response)
+            if isinstance(js_data, list):
+                if self.debug:
+                    print(f"⚠️  Server returned empty array - may need different approach")
+                    print(f"   Try checking if cookies/headers match your TV app exactly")
+                return False
+            
+            # Check for both lowercase and uppercase Token (Go code uses "Token" with capital T)
+            token = js_data.get('token') or js_data.get('Token')
+            
+            if token:
+                self.token = token
                 if self.debug:
                     print(f"✅ Handshake successful! Token received: {self.token[:20]}...")
+                return True
+            elif self.token:
+                # Token already set and server accepted it (like Go implementation)
+                if self.debug:
+                    print(f"✅ Handshake successful! Server accepted existing token")
                 return True
             else:
                 if self.debug:
