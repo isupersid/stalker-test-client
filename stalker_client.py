@@ -40,13 +40,20 @@ class StalkerClient:
         # Serial number: use custom if provided, otherwise MAC without colons
         self.serial_number = serial_number if serial_number else self.mac_address.replace(':', '')
         
-        # Set up default headers
+        # Set up default headers (like Go implementation)
         self.session.headers.update({
-            'User-Agent': 'Mozilla/5.0 (QtEmbedded; U; Linux; C) AppleWebKit/533.3 (KHTML, like Gecko) MAG200 stbapp ver: 2 rev: 250 Safari/533.3',
+            'User-Agent': 'Mozilla/5.0 (QtEmbedded; U; Linux; C) AppleWebKit/533.3 (KHTML, like Gecko) MAG200 stbapp ver: 4 rev: 2116 Mobile Safari/533.3',
+            'X-User-Agent': f'Model: MAG250; Link: Ethernet',
             'Accept': '*/*',
             'Accept-Encoding': 'gzip, deflate',
             'Connection': 'keep-alive'
         })
+        
+        # Set cookies (like Go implementation)
+        self.session.cookies.set('mac', self.mac_address)
+        self.session.cookies.set('sn', self.serial_number)
+        self.session.cookies.set('stb_lang', 'en')
+        self.session.cookies.set('timezone', self.timezone)
     
     def _make_request(self, endpoint, params=None):
         """Make a request to the Stalker portal."""
@@ -66,6 +73,8 @@ class StalkerClient:
             print(f"🔍 DEBUG: Request URL: {url}")
             print(f"🔍 DEBUG: Request Headers:")
             print(json.dumps(dict(self.session.headers), indent=2))
+            print(f"🔍 DEBUG: Request Cookies:")
+            print(json.dumps({c.name: c.value for c in self.session.cookies}, indent=2))
             print(f"🔍 DEBUG: Params:")
             print(json.dumps(params, indent=2))
         
@@ -161,11 +170,12 @@ class StalkerClient:
         if not self.api_path:
             self.detect_api_path()
         
+        # Use prehash=0 for initial handshake (like Go implementation)
         params = {
             'type': 'stb',
             'action': 'handshake',
-            'prehash': self.token if self.token else '',
-            'token': '',
+            'prehash': '0',
+            'token': self.token if self.token else '',
             'JsHttpRequest': '1-xml'
         }
         
