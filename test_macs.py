@@ -29,7 +29,8 @@ def test_mac_address(portal_url, mac_address, timezone="America/New_York", verbo
         'message': '',
         'authorized': False,
         'details': {},
-        'rate_limited': False
+        'rate_limited': False,
+        'was_rate_limited': False  # Track if rate limiting occurred at any point
     }
     
     try:
@@ -58,6 +59,9 @@ def test_mac_address(portal_url, mac_address, timezone="America/New_York", verbo
             
             # Check if we got rate limited by looking at the response
             if response is None:
+                # Mark that we encountered rate limiting
+                result['was_rate_limited'] = True
+                
                 # Could be rate limited, wait and retry
                 if attempt < max_retries - 1:
                     backoff_time = 10 * (2 ** attempt)  # Exponential backoff: 10s, 20s, 40s
@@ -348,10 +352,18 @@ def main():
     print("="*60)
     print(f"Total MACs tested: {len(macs)}")
     print(f"Authorized: {len(authorized_macs)}")
-    print(f"Not authorized: {sum(1 for r in results if r['status'] == 2)}")
-    print(f"Inactive: {sum(1 for r in results if r['status'] == 0)}")
-    print(f"Rate limited: {sum(1 for r in results if r.get('rate_limited'))}")
-    print(f"Failed: {sum(1 for r in results if not r['handshake'])}")
+    print(f"Not authorized: {sum(1 for r in results if r['status'] == 2 or (isinstance(r['status'], str) and r['status'] == '2'))}")
+    print(f"Inactive: {sum(1 for r in results if r['status'] == 0 or (isinstance(r['status'], str) and r['status'] == '0'))}")
+    
+    rate_limited_count = sum(1 for r in results if r.get('was_rate_limited'))
+    failed_retry_count = sum(1 for r in results if r.get('rate_limited'))
+    
+    if rate_limited_count > 0:
+        print(f"Encountered rate limiting: {rate_limited_count} (recovered with retry)")
+    if failed_retry_count > 0:
+        print(f"Failed (max retries): {failed_retry_count}")
+    
+    print(f"Failed (handshake): {sum(1 for r in results if not r['handshake'])}")
     print()
     
     if authorized_macs:
@@ -384,6 +396,13 @@ def main():
         print("   - Verify the portal URL is correct")
         print("   - Contact your provider to check which MACs are registered")
         print("   - Check if your subscription is active")
+        
+        if rate_limited_count > 0:
+            print()
+            print("⚠️  Rate Limiting Detected:")
+            print(f"   - {rate_limited_count} request(s) were rate limited")
+            print("   - Consider increasing the delay between requests")
+            print("   - Current delay: {:.1f}s, try 10-15s for heavily rate-limited servers".format(delay))
     
     print()
 
