@@ -64,6 +64,8 @@ class StalkerClient:
         
         if self.debug:
             print(f"🔍 DEBUG: Request URL: {url}")
+            print(f"🔍 DEBUG: Request Headers:")
+            print(json.dumps(dict(self.session.headers), indent=2))
             print(f"🔍 DEBUG: Params:")
             print(json.dumps(params, indent=2))
         
