@@ -268,13 +268,31 @@ class StalkerClient:
             status_code = js_data.get('status')
             msg = js_data.get('msg', '')
             
-            if status_code == 1:
+            # Check if we got full profile (indicates successful auth)
+            has_profile_data = 'login' in js_data or 'fname' in js_data or 'expire_billing_date' in js_data
+            
+            if has_profile_data:
+                print(f"   📊 Status: 🟢 Successfully Authenticated!")
+                if js_data.get('login'):
+                    print(f"   👤 Login: {js_data['login']}")
+                if js_data.get('fname'):
+                    print(f"   📝 Name: {js_data['fname']}")
+                if js_data.get('expire_billing_date'):
+                    print(f"   📅 Subscription expires: {js_data['expire_billing_date']}")
+                if js_data.get('expirydate'):
+                    print(f"   📅 Expiry date: {js_data['expirydate']}")
+                # Return True for successful authentication
+                return True
+            elif status_code == 1 or (isinstance(status_code, str) and status_code == "1"):
                 print(f"   📊 Status: 🟢 Active and Authorized")
-            elif status_code == 2:
+            elif status_code == 2 or (isinstance(status_code, str) and status_code == "2"):
                 print(f"   📊 Status: 🔴 Not Authorized (Authentication Pending)")
                 print(f"   ⚠️  This MAC address is not registered/authorized with the provider")
-            elif status_code == 0:
-                print(f"   📊 Status: 🟡 Inactive")
+            elif status_code == 0 or (isinstance(status_code, str) and status_code == "0"):
+                # Status 0 can mean different things in different contexts
+                # If we have profile data, it's success; otherwise inactive
+                if not has_profile_data:
+                    print(f"   📊 Status: 🟡 Inactive")
             else:
                 print(f"   📊 Status: ⚪ Unknown (code: {status_code})")
             
@@ -295,23 +313,22 @@ class StalkerClient:
                 print(f"   🔗 Launcher Profile: {js_data['launcher_profile_url']}")
             
             # Display account information if available
-            if 'phone' in js_data:
+            if 'phone' in js_data and js_data['phone']:
                 print(f"   📱 Phone: {js_data['phone']}")
-            if 'fio' in js_data:
-                print(f"   👤 Name: {js_data['fio']}")
-            if 'account' in js_data:
+            if 'account' in js_data and js_data['account']:
                 print(f"   💳 Account: {js_data['account']}")
             
             # Show any other fields not explicitly handled
             if self.debug:
                 known_fields = {'status', 'msg', 'info', 'template', 'launcher_url', 
-                               'launcher_profile_url', 'phone', 'fio', 'account'}
-                other_fields = {k: v for k, v in js_data.items() if k not in known_fields}
+                               'launcher_profile_url', 'phone', 'fio', 'account', 
+                               'login', 'fname', 'expire_billing_date', 'expirydate'}
+                other_fields = {k: v for k, v in js_data.items() if k not in known_fields and not isinstance(v, (dict, list))}
                 if other_fields:
                     print(f"   🔍 Other fields: {json.dumps(other_fields, indent=2)}")
             
-            # Return True only if status is 1 (authorized)
-            return status_code == 1
+            # Return True if we have profile data (successful auth) or status is 1
+            return has_profile_data or status_code == 1 or (isinstance(status_code, str) and status_code == "1")
         else:
             print("❌ Authentication failed")
             return False
