@@ -6,6 +6,9 @@ Tests multiple MAC addresses against a Stalker portal to see which are authorize
 
 import sys
 import time
+import json
+import random
+from pathlib import Path
 from stalker_client import StalkerClient, load_config
 
 
@@ -153,6 +156,102 @@ def format_mac(mac):
     return mac.upper()
 
 
+def load_used_macs(filename='used_mac_bases.json'):
+    """Load previously used MAC base addresses from file."""
+    try:
+        if Path(filename).exists():
+            with open(filename, 'r') as f:
+                return json.load(f)
+        return []
+    except Exception as e:
+        print(f"⚠️  Warning: Could not load used MAC bases: {e}")
+        return []
+
+
+def save_used_mac(base_mac, filename='used_mac_bases.json'):
+    """Save a MAC base address to the used list."""
+    try:
+        used_macs = load_used_macs(filename)
+        if base_mac not in used_macs:
+            used_macs.append(base_mac)
+            with open(filename, 'w') as f:
+                json.dump(used_macs, f, indent=2)
+    except Exception as e:
+        print(f"⚠️  Warning: Could not save used MAC base: {e}")
+
+
+def generate_random_mac_base():
+    """Generate a random MAC address base (first 5 octets)."""
+    # First 3 octets are fixed: 00:1A:79
+    # Generate 2 random octets for positions 4 and 5
+    fixed_octets = [0x00, 0x1A, 0x79]
+    random_octets = [random.randint(0x00, 0xFF) for _ in range(2)]
+    all_octets = fixed_octets + random_octets
+    return ':'.join(f"{octet:02X}" for octet in all_octets) + ':'
+
+
+def get_unique_random_mac_base():
+    """Get a random MAC base that hasn't been used before."""
+    used_macs = load_used_macs()
+    max_attempts = 100
+    
+    for _ in range(max_attempts):
+        base_mac = generate_random_mac_base()
+        if base_mac not in used_macs:
+            return base_mac
+    
+    # If we can't find a unique one after max_attempts, just return a random one
+    print("⚠️  Warning: Could not find unused MAC base after 100 attempts, using random one")
+    return generate_random_mac_base()
+
+
+def save_test_results(results, filename='test_results.json'):
+    """Save test results for MAC addresses with status != 2."""
+    try:
+        # Load existing results if file exists
+        existing_results = {}
+        if Path(filename).exists():
+            try:
+                with open(filename, 'r') as f:
+                    existing_results = json.load(f)
+            except Exception as e:
+                print(f"⚠️  Warning: Could not load existing results: {e}")
+        
+        # Filter and save results with status != 2
+        new_entries = 0
+        for result in results:
+            status = result.get('status')
+            # Skip if status is 2 or "2"
+            if status == 2 or (isinstance(status, str) and status == "2"):
+                continue
+            
+            mac = result['mac']
+            # Create a clean result entry
+            entry = {
+                'mac': mac,
+                'status': status,
+                'message': result.get('message', ''),
+                'authorized': result.get('authorized', False),
+                'handshake': result.get('handshake', False),
+                'details': result.get('details', {}),
+                'timestamp': time.strftime('%Y-%m-%d %H:%M:%S')
+            }
+            
+            # Only update if this is a new entry or different from existing
+            if mac not in existing_results or existing_results[mac].get('status') != status:
+                existing_results[mac] = entry
+                new_entries += 1
+        
+        # Save the updated results
+        if new_entries > 0:
+            with open(filename, 'w') as f:
+                json.dump(existing_results, f, indent=2)
+            print(f"💾 Saved {new_entries} new result(s) to {filename}")
+        
+    except Exception as e:
+        print(f"⚠️  Warning: Could not save test results: {e}")
+
+
 def main():
     """Main entry point."""
     print()
@@ -219,26 +318,23 @@ def main():
     elif choice == '3':
         print()
         
-        # Try to get default base from config
-        default_base = ""
-        if config.get('mac_address'):
-            # Extract first 5 octets from config MAC
-            config_mac = config['mac_address']
-            octets = config_mac.split(':')
-            if len(octets) >= 6:
-                default_base = ':'.join(octets[:5]) + ':'
+        # Generate a unique random MAC base as default
+        default_base = get_unique_random_mac_base()
         
-        if default_base:
-            print(f"Example: 00:1A:79:16:BA:")
-            base = input(f"Base MAC (first 5 octets with colons) [{default_base}]: ").strip()
-            if not base:
-                base = default_base
+        print(f"Example: 00:1A:79:16:BA:")
+        print(f"🎲 Random base generated: {default_base}")
+        base = input(f"Base MAC (first 5 octets with colons) [{default_base}]: ").strip()
+        if not base:
+            base = default_base
+            print(f"✅ Using random base: {base}")
         else:
-            print("Example: 00:1A:79:16:BA:")
-            base = input("Base MAC (first 5 octets with colons): ").strip()
+            print(f"✅ Using custom base: {base}")
         
         if not base.endswith(':'):
             base += ':'
+        
+        # Save the base MAC to the used list
+        save_used_mac(base)
         
         start = int(input("Start (0-255, default: 0): ").strip() or "0")
         end = int(input("End (0-255, default: 255): ").strip() or "255")
@@ -376,6 +472,9 @@ def main():
     
     print(f"Failed (handshake): {sum(1 for r in results if not r['handshake'])}")
     print()
+    
+    # Save test results for MACs with status != 2
+    save_test_results(results)
     
     if authorized_macs:
         print("🎉 Authorized MAC addresses:")
