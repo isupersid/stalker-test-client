@@ -12,18 +12,19 @@ from pathlib import Path
 from stalker_client import StalkerClient, load_config
 
 
-def test_mac_address(portal_url, mac_address, timezone="America/New_York", verbose=False, max_retries=3, api_path=None, serial_number=None):
+def test_mac_address(portal_url, mac_address, timezone="America/New_York", verbose=False, max_retries=3, api_path=None, serial_number=None, stb_type=None):
     """
     Test a single MAC address against the portal.
     
     Args:
         api_path: Pre-detected API path to avoid re-detection for each MAC
         serial_number: Optional custom serial number (only sent if provided)
+        stb_type: Optional STB device type (default: MAG270)
     
     Returns:
         dict: Result with status, message, and other details
     """
-    client = StalkerClient(portal_url, mac_address, timezone, api_path=api_path, debug=False, serial_number=serial_number)
+    client = StalkerClient(portal_url, mac_address, timezone, api_path=api_path, debug=False, serial_number=serial_number, stb_type=stb_type)
     
     result = {
         'mac': mac_address,

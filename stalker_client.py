@@ -15,7 +15,7 @@ from urllib.parse import urljoin, quote
 class StalkerClient:
     """Client for connecting to Stalker portal middleware."""
     
-    def __init__(self, portal_url, mac_address, timezone="America/New_York", api_path=None, debug=False, serial_number=None):
+    def __init__(self, portal_url, mac_address, timezone="America/New_York", api_path=None, debug=False, serial_number=None, stb_type=None):
         """
         Initialize the Stalker client.
         
@@ -26,6 +26,7 @@ class StalkerClient:
             api_path: Custom API path (default: tries common paths automatically)
             debug: Enable debug output
             serial_number: Custom serial number (default: MAC without colons)
+            stb_type: STB device type (default: MAG270)
         """
         self.portal_url = portal_url.rstrip('/')
         self.mac_address = mac_address.upper()
@@ -39,10 +40,13 @@ class StalkerClient:
         self.serial_number = serial_number
         self._serial_number_explicit = serial_number is not None
         
+        # STB type: default to MAG270
+        self.stb_type = stb_type if stb_type else 'MAG270'
+        
         # Set up default headers (like Go implementation)
         self.session.headers.update({
             'User-Agent': 'Mozilla/5.0 (QtEmbedded; U; Linux; C) AppleWebKit/533.3 (KHTML, like Gecko) MAG200 stbapp ver: 4 rev: 2116 Mobile Safari/533.3',
-            'X-User-Agent': f'Model: MAG250; Link: Ethernet',
+            'X-User-Agent': f'Model: MAG270; Link: Ethernet',
             'Accept': '*/*',
             'Accept-Encoding': 'gzip, deflate',
             'Connection': 'keep-alive'
@@ -177,7 +181,8 @@ class StalkerClient:
             'action': 'handshake',
             'prehash': '0',
             'token': self.token if self.token else '',
-            'JsHttpRequest': '1-xml'
+            'JsHttpRequest': '1-xml',
+            'stb_type': self.stb_type
         }
         
         response = self._make_request(self.api_path, params)
@@ -226,7 +231,8 @@ class StalkerClient:
             'action': 'get_profile',
             'mac': self.mac_address,
             'prehash': self.token if self.token else '',
-            'JsHttpRequest': '1-xml'
+            'JsHttpRequest': '1-xml',
+            'stb_type': self.stb_type
         }
         
         # Only add sn if explicitly set
@@ -499,7 +505,7 @@ def load_config(config_path="config.json"):
     return {}
 
 
-def save_config(portal_url, mac_address, timezone, serial_number=None, config_path="config.json"):
+def save_config(portal_url, mac_address, timezone, serial_number=None, stb_type=None, config_path="config.json"):
     """Save configuration to JSON file."""
     config = {
         "portal_url": portal_url,
@@ -509,6 +515,9 @@ def save_config(portal_url, mac_address, timezone, serial_number=None, config_pa
     
     if serial_number:
         config["serial_number"] = serial_number
+    
+    if stb_type:
+        config["stb_type"] = stb_type
     
     try:
         with open(config_path, 'w') as f:
@@ -583,6 +592,12 @@ def main():
         if not serial_number:
             serial_number = None
     
+    # STB Type (optional)
+    default_stb_type = config.get('stb_type', 'MAG270')
+    stb_type = input(f"STB Type (default: {default_stb_type}): ").strip()
+    if not stb_type:
+        stb_type = default_stb_type
+    
     # Debug mode
     print()
     debug_choice = input("🐛 Enable debug mode? (y/n, default: n): ").strip().lower()
@@ -591,16 +606,16 @@ def main():
     # Ask to save configuration if it's new or changed
     if not config or config.get('portal_url') != portal_url or \
        config.get('mac_address') != mac_address or config.get('timezone') != timezone or \
-       config.get('serial_number') != serial_number:
+       config.get('serial_number') != serial_number or config.get('stb_type') != stb_type:
         print()
         save_choice = input("💾 Save these settings to config.json? (y/n): ").strip().lower()
         if save_choice == 'y':
-            save_config(portal_url, mac_address, timezone, serial_number)
+            save_config(portal_url, mac_address, timezone, serial_number, stb_type)
     
     print()
     
     # Create client and test connection
-    client = StalkerClient(portal_url, mac_address, timezone, debug=debug, serial_number=serial_number)
+    client = StalkerClient(portal_url, mac_address, timezone, debug=debug, serial_number=serial_number, stb_type=stb_type)
     client.test_connection()
     
     print()
