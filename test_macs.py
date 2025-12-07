@@ -17,12 +17,26 @@ def test_mac_address(portal_url, mac_address, timezone="America/New_York", verbo
     Test a single MAC address against the portal.
     
     Args:
-        api_path: Pre-detected API path to avoid re-detection for each MAC
-        serial_number: Optional custom serial number (only sent if provided)
-        stb_type: Optional STB device type (default: MAG270)
+        portal_url (str): The Stalker portal URL to test against
+        mac_address (str): The MAC address to test (format: XX:XX:XX:XX:XX:XX)
+        timezone (str, optional): Timezone for the connection. Defaults to "America/New_York"
+        verbose (bool, optional): Enable verbose output for debugging. Defaults to False
+        max_retries (int, optional): Maximum number of retry attempts for rate-limited requests. Defaults to 3
+        api_path (str, optional): Pre-detected API path to avoid re-detection for each MAC. Defaults to None
+        serial_number (str, optional): Custom serial number for the STB device (only sent if provided). Defaults to None
+        stb_type (str, optional): STB device type (e.g., MAG270). Defaults to None
     
     Returns:
-        dict: Result with status, message, and other details
+        dict: Result dictionary containing:
+            - mac (str): The tested MAC address
+            - handshake (bool): Whether handshake was successful
+            - status (int/str): Response status code from portal
+            - message (str): Response message or error description
+            - authorized (bool): Whether the MAC is authorized
+            - details (dict): User details (phone, name, account, expiry) if authorized
+            - rate_limited (bool): Whether final result was rate-limited
+            - was_rate_limited (bool): Whether rate limiting occurred at any point
+            - retry_wait_time (int): Total time (seconds) spent waiting for retries
     """
     client = StalkerClient(portal_url, mac_address, timezone, api_path=api_path, debug=False, serial_number=serial_number, stb_type=stb_type)
     
@@ -133,10 +147,19 @@ def test_mac_address(portal_url, mac_address, timezone="America/New_York", verbo
 
 def generate_mac_range(base_mac, start, end):
     """
-    Generate a range of MAC addresses.
+    Generate a range of MAC addresses by varying the last octet.
     
-    Example: generate_mac_range("00:1A:79:16:BA:", 0, 255)
-    Returns: ["00:1A:79:16:BA:00", "00:1A:79:16:BA:01", ...]
+    Args:
+        base_mac (str): The base MAC address (first 5 octets with colons, e.g., "00:1A:79:16:BA:")
+        start (int): Starting value for the last octet (0-255)
+        end (int): Ending value for the last octet (0-255, inclusive)
+    
+    Returns:
+        list: List of MAC addresses in the range
+    
+    Example:
+        >>> generate_mac_range("00:1A:79:16:BA:", 0, 2)
+        ["00:1A:79:16:BA:00", "00:1A:79:16:BA:01", "00:1A:79:16:BA:02"]
     """
     macs = []
     for i in range(start, end + 1):
@@ -146,7 +169,15 @@ def generate_mac_range(base_mac, start, end):
 
 
 def format_mac(mac):
-    """Ensure MAC address is properly formatted."""
+    """
+    Ensure MAC address is properly formatted with colons and uppercase.
+    
+    Args:
+        mac (str): MAC address in any format (with/without separators: colons, hyphens, dots)
+    
+    Returns:
+        str: Formatted MAC address in XX:XX:XX:XX:XX:XX format (uppercase)
+    """
     # Remove common separators
     clean = mac.replace(':', '').replace('-', '').replace('.', '')
     
@@ -158,7 +189,15 @@ def format_mac(mac):
 
 
 def load_used_macs(filename='used_mac_bases.json'):
-    """Load previously used MAC base addresses from file."""
+    """
+    Load previously used MAC base addresses from file.
+    
+    Args:
+        filename (str, optional): Path to the JSON file storing used MAC bases. Defaults to 'used_mac_bases.json'
+    
+    Returns:
+        list: List of previously used MAC base addresses, or empty list if file doesn't exist or on error
+    """
     try:
         if Path(filename).exists():
             with open(filename, 'r') as f:
@@ -170,7 +209,16 @@ def load_used_macs(filename='used_mac_bases.json'):
 
 
 def save_used_mac(base_mac, filename='used_mac_bases.json'):
-    """Save a MAC base address to the used list."""
+    """
+    Save a MAC base address to the used list to avoid reuse.
+    
+    Args:
+        base_mac (str): MAC base address to save (first 5 octets, e.g., "00:1A:79:16:BA:")
+        filename (str, optional): Path to the JSON file storing used MAC bases. Defaults to 'used_mac_bases.json'
+    
+    Returns:
+        None
+    """
     try:
         used_macs = load_used_macs(filename)
         if base_mac not in used_macs:
@@ -182,7 +230,17 @@ def save_used_mac(base_mac, filename='used_mac_bases.json'):
 
 
 def generate_random_mac_base():
-    """Generate a random MAC address base (first 5 octets)."""
+    """
+    Generate a random MAC address base (first 5 octets).
+    
+    The first 3 octets are fixed to 00:1A:79, and the next 2 octets are randomly generated.
+    
+    Args:
+        None
+    
+    Returns:
+        str: Random MAC base address (e.g., "00:1A:79:3F:A2:")
+    """
     # First 3 octets are fixed: 00:1A:79
     # Generate 2 random octets for positions 4 and 5
     fixed_octets = [0x00, 0x1A, 0x79]
@@ -192,7 +250,18 @@ def generate_random_mac_base():
 
 
 def get_unique_random_mac_base():
-    """Get a random MAC base that hasn't been used before."""
+    """
+    Get a random MAC base that hasn't been used before.
+    
+    Checks against the used_mac_bases.json file to avoid generating duplicate MAC bases.
+    Will attempt up to 100 times to find a unique base.
+    
+    Args:
+        None
+    
+    Returns:
+        str: A unique MAC base address (e.g., "00:1A:79:3F:A2:")
+    """
     used_macs = load_used_macs()
     max_attempts = 100
     
@@ -207,7 +276,19 @@ def get_unique_random_mac_base():
 
 
 def save_test_results(results, filename='test_results.json'):
-    """Save test results for MAC addresses with status != 2."""
+    """
+    Save test results for MAC addresses with status != 2.
+    
+    Filters out unauthorized MACs (status 2) and saves only interesting results
+    (authorized, device conflicts, errors, etc.) to a JSON file.
+    
+    Args:
+        results (list): List of result dictionaries from test_mac_address()
+        filename (str, optional): Path to save the results JSON file. Defaults to 'test_results.json'
+    
+    Returns:
+        None
+    """
     try:
         # Load existing results if file exists
         existing_results = {}
@@ -254,7 +335,22 @@ def save_test_results(results, filename='test_results.json'):
 
 
 def main():
-    """Main entry point."""
+    """
+    Main entry point for the MAC address batch tester.
+    
+    Interactive CLI that allows users to:
+    1. Enter MAC addresses manually
+    2. Load MAC addresses from a file
+    3. Generate a range of MAC addresses
+    
+    Then tests each MAC against the specified Stalker portal and displays results.
+    
+    Args:
+        None
+    
+    Returns:
+        None
+    """
     print()
     print("╔════════════════════════════════════════════════════════════╗")
     print("║          MAC Address Batch Tester                         ║")
